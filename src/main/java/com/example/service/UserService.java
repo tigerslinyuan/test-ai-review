@@ -1,136 +1,211 @@
 package com.example.service;
 
+import com.example.constants.AppConstants;
+import com.example.exception.ResourceNotFoundException;
+import com.example.model.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 用户服务类
+ */
 @Service
 public class UserService {
 
-    // 使用静态变量存储数据，没有线程安全
-    private static Map<String, Map<String, String>> users = new HashMap<>();
-    private static int counter = 1;
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
-    public String getUserInfo(String id) {
-        // 没有空值检查
-        Map<String, String> user = users.get(id);
-        
-        // 直接返回，没有检查是否存在
-        return user.get("name") + "," + user.get("email");
+    // 使用线程安全的ConcurrentHashMap和AtomicLong
+    private final Map<String, User> users = new ConcurrentHashMap<>();
+    private final AtomicLong counter = new AtomicLong(1);
+
+    /**
+     * 根据ID获取用户信息
+     *
+     * @param id 用户ID
+     * @return 用户对象
+     * @throws ResourceNotFoundException 如果用户不存在
+     */
+    public User getUserById(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户ID不能为空");
+        }
+
+        User user = users.get(id);
+        if (user == null) {
+            logger.warn("User not found with id: {}", id);
+            throw new ResourceNotFoundException("用户不存在");
+        }
+
+        logger.debug("Retrieved user with id: {}", id);
+        return user;
     }
 
-    public String createUser(String name, String email) {
-        // 硬编码的ID生成逻辑
-        String userId = "user_" + counter;
-        counter++;
-        
-        // 没有检查email格式
-        // 没有检查name长度
-        
-        Map<String, String> user = new HashMap<>();
-        user.put("id", userId);
-        user.put("name", name);
-        user.put("email", email);
-        user.put("createdAt", String.valueOf(System.currentTimeMillis()));
-        
+    /**
+     * 创建新用户
+     *
+     * @param name  用户名
+     * @param email 邮箱
+     * @return 创建的用户对象
+     */
+    public User createUser(String name, String email) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("邮箱不能为空");
+        }
+
+        String userId = AppConstants.USER_ID_PREFIX + counter.getAndIncrement();
+        long currentTime = System.currentTimeMillis();
+
+        User user = new User(userId, name.trim(), email.trim().toLowerCase(), currentTime, null);
         users.put(userId, user);
-        
-        return userId;
+
+        logger.info("Created user with id: {}, name: {}, email: {}", userId, name, email);
+        return user;
     }
 
-    public List<Map<String, String>> getAllUsers(int page, int size) {
-        List<Map<String, String>> allUsers = new ArrayList<>();
-        
-        // 低效的遍历方式
-        for (String key : users.keySet()) {
-            allUsers.add(users.get(key));
-        }
-        
-        // 没有排序
-        // 简单的分页实现，没有考虑性能
+    /**
+     * 获取所有用户（分页）
+     *
+     * @param page 页码（从1开始）
+     * @param size 每页大小
+     * @return 用户列表
+     */
+    public List<User> getAllUsers(int page, int size) {
+        List<User> allUsers = new ArrayList<>(users.values());
+
+        // 按创建时间倒序排序
+        allUsers.sort((u1, u2) -> {
+            Long time1 = u1.getCreatedAt() != null ? u1.getCreatedAt() : 0L;
+            Long time2 = u2.getCreatedAt() != null ? u2.getCreatedAt() : 0L;
+            return time2.compareTo(time1);
+        });
+
+        // 计算分页
         int start = (page - 1) * size;
-        int end = start + size;
-        
-        // 没有边界检查
-        if (start > allUsers.size()) {
-            return new ArrayList<>();
+        if (start >= allUsers.size()) {
+            return Collections.emptyList();
         }
-        
-        if (end > allUsers.size()) {
-            end = allUsers.size();
-        }
-        
-        // 创建新列表，浪费内存
-        List<Map<String, String>> result = new ArrayList<>();
-        for (int i = start; i < end; i++) {
-            result.add(allUsers.get(i));
-        }
-        
-        return result;
+
+        int end = Math.min(start + size, allUsers.size());
+        return allUsers.subList(start, end);
     }
 
-    public void updateUser(String id, String name, String email) {
-        // 没有检查用户是否存在
-        Map<String, String> user = users.get(id);
-        
-        // 直接修改，没有验证
-        user.put("name", name);
-        user.put("email", email);
-        user.put("updatedAt", String.valueOf(System.currentTimeMillis()));
-        
+    /**
+     * 获取用户总数
+     *
+     * @return 用户总数
+     */
+    public long getUserCount() {
+        return users.size();
+    }
+
+    /**
+     * 更新用户信息
+     *
+     * @param id    用户ID
+     * @param name  新用户名
+     * @param email 新邮箱
+     * @return 更新后的用户对象
+     * @throws ResourceNotFoundException 如果用户不存在
+     */
+    public User updateUser(String id, String name, String email) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户ID不能为空");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("邮箱不能为空");
+        }
+
+        User user = getUserById(id);
+        user.setName(name.trim());
+        user.setEmail(email.trim().toLowerCase());
+        user.setUpdatedAt(System.currentTimeMillis());
+
         users.put(id, user);
+        logger.info("Updated user with id: {}", id);
+        return user;
     }
 
+    /**
+     * 删除用户
+     *
+     * @param id 用户ID
+     * @throws ResourceNotFoundException 如果用户不存在
+     */
     public void deleteUser(String id) {
-        // 没有检查用户是否存在
-        // 没有返回值，调用者不知道是否成功
-        users.remove(id);
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户ID不能为空");
+        }
+
+        User user = users.remove(id);
+        if (user == null) {
+            logger.warn("Attempted to delete non-existent user with id: {}", id);
+            throw new ResourceNotFoundException("用户不存在");
+        }
+
+        logger.info("Deleted user with id: {}", id);
     }
 
-    // 过长的函数，包含多个职责
+    /**
+     * 检查用户是否存在
+     *
+     * @param id 用户ID
+     * @return 如果用户存在返回true，否则返回false
+     */
+    public boolean userExists(String id) {
+        return id != null && users.containsKey(id);
+    }
+
+    /**
+     * 获取用户统计信息
+     *
+     * @return 统计信息Map
+     */
     public Map<String, Object> getUserStatistics() {
+        long total = users.size();
+        long validEmails = countValidEmails();
+        long recentUsers = countRecentUsers();
+
         Map<String, Object> stats = new HashMap<>();
-        
-        // 重复遍历
-        int total = users.size();
         stats.put("total", total);
-        
-        // 不必要的复杂逻辑
-        int count = 0;
-        for (String key : users.keySet()) {
-            Map<String, String> user = users.get(key);
-            String email = user.get("email");
-            if (email != null && email.contains("@")) {
-                count++;
-            }
-        }
-        stats.put("validEmails", count);
-        
-        // 硬编码的统计逻辑
-        long now = System.currentTimeMillis();
-        int recentCount = 0;
-        for (String key : users.keySet()) {
-            Map<String, String> user = users.get(key);
-            String createdAt = user.get("createdAt");
-            if (createdAt != null) {
-                long created = Long.parseLong(createdAt);
-                // 魔法数字：7天的毫秒数
-                if (now - created < 604800000) {
-                    recentCount++;
-                }
-            }
-        }
-        stats.put("recentUsers", recentCount);
-        
+        stats.put("validEmails", validEmails);
+        stats.put("recentUsers", recentUsers);
+
+        logger.debug("User statistics: total={}, validEmails={}, recentUsers={}", total, validEmails, recentUsers);
         return stats;
     }
 
-    // 未使用的变量
-    private String unusedField = "test";
-    
-    // 注释掉的代码
-    // public void oldMethod() {
-    //     System.out.println("old code");
-    // }
-}
+    /**
+     * 统计有效邮箱数量
+     */
+    private long countValidEmails() {
+        return users.values().stream()
+                .filter(user -> user.getEmail() != null && user.getEmail().contains("@"))
+                .count();
+    }
 
+    /**
+     * 统计最近7天创建的用户数量
+     */
+    private long countRecentUsers() {
+        long now = System.currentTimeMillis();
+        long timeRange = AppConstants.RECENT_USER_TIME_RANGE_MS;
+
+        return users.values().stream()
+                .filter(user -> {
+                    Long createdAt = user.getCreatedAt();
+                    return createdAt != null && (now - createdAt) < timeRange;
+                })
+                .count();
+    }
+}

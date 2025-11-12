@@ -1,155 +1,182 @@
 package com.example.controller;
 
+import com.example.constants.AppConstants;
+import com.example.dto.*;
+import com.example.model.User;
 import com.example.service.UserService;
+import com.example.util.UserConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.Pattern;
+import java.util.List;
+import java.util.stream.Collectors;
 
+/**
+ * 用户控制器
+ */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/users")
+@Validated
 public class UserController {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+
+    private final UserService userService;
+
     @Autowired
-    UserService userService;
-
-    // 硬编码的值
-    @GetMapping("/user/{id}")
-    public Map<String, Object> getUser(@PathVariable String id) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 没有输入验证
-        // 魔法数字
-        if (id.length() > 100) {
-            result.put("error", "id too long");
-            return result;
-        }
-        
-        // 直接使用字符串拼接，没有参数化
-        String userInfo = userService.getUserInfo(id);
-        
-        // 命名不规范
-        String a = userInfo;
-        String b = "success";
-        String c = "200";
-        
-        result.put("data", a);
-        result.put("status", b);
-        result.put("code", c);
-        
-        return result;
+    public UserController(UserService userService) {
+        this.userService = userService;
     }
 
-    @PostMapping("/user")
-    public Map<String, Object> createUser(@RequestBody Map<String, String> request) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 没有输入验证
-        String name = request.get("name");
-        String email = request.get("email");
-        
-        // 硬编码
-        if (name == null || name.equals("")) {
-            result.put("error", "name is required");
-            result.put("code", "400");
-            return result;
+    /**
+     * 根据ID获取用户
+     *
+     * @param id 用户ID
+     * @return 用户信息
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserDTO>> getUser(
+            @PathVariable
+            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
+            String id) {
+
+        logger.info("Getting user with id: {}", id);
+
+        if (id.length() > AppConstants.MAX_ID_LENGTH) {
+            logger.warn("User id too long: {}", id);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
         }
-        
-        // 重复的代码逻辑
-        if (email == null || email.equals("")) {
-            result.put("error", "email is required");
-            result.put("code", "400");
-            return result;
-        }
-        
-        // 没有异常处理
-        String userId = userService.createUser(name, email);
-        
-        result.put("userId", userId);
-        result.put("message", "created");
-        result.put("code", "200");
-        
-        return result;
+
+        User user = userService.getUserById(id);
+        UserDTO userDTO = UserConverter.toDTO(user);
+
+        return ResponseEntity.ok(ApiResponse.success(userDTO));
     }
 
-    @GetMapping("/users")
-    public Map<String, Object> getAllUsers(@RequestParam(required = false) String page, 
-                                           @RequestParam(required = false) String size) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 魔法数字，没有默认值处理
-        int pageNum = 1;
-        int pageSize = 10;
-        
-        // 没有异常处理，如果page不是数字会崩溃
-        if (page != null) {
-            pageNum = Integer.parseInt(page);
-        }
-        if (size != null) {
-            pageSize = Integer.parseInt(size);
-        }
-        
-        // 没有边界检查
-        // 硬编码的分页逻辑
-        if (pageNum < 1) {
-            pageNum = 1;
-        }
-        if (pageSize > 100) {
-            pageSize = 100;
-        }
-        
-        result.put("data", userService.getAllUsers(pageNum, pageSize));
-        result.put("page", pageNum);
-        result.put("size", pageSize);
-        
-        return result;
+    /**
+     * 创建用户
+     *
+     * @param userDTO 用户信息
+     * @return 创建的用户信息
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<UserDTO>> createUser(@Valid @RequestBody UserDTO userDTO) {
+        logger.info("Creating user with name: {}, email: {}", userDTO.getName(), userDTO.getEmail());
+
+        User user = userService.createUser(userDTO.getName(), userDTO.getEmail());
+        UserDTO createdDTO = UserConverter.toDTO(user);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("用户创建成功", createdDTO));
     }
 
-    @PutMapping("/user/{id}")
-    public Map<String, Object> updateUser(@PathVariable String id, @RequestBody Map<String, String> request) {
-        // 没有输入验证
-        // 没有检查用户是否存在
-        String name = request.get("name");
-        String email = request.get("email");
-        
-        // 重复的验证逻辑
-        if (name == null || name.equals("")) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "name is required");
-            error.put("code", "400");
-            return error;
-        }
-        
-        if (email == null || email.equals("")) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "email is required");
-            error.put("code", "400");
-            return error;
-        }
-        
-        // 没有异常处理
-        userService.updateUser(id, name, email);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("message", "updated");
-        result.put("code", "200");
-        
-        return result;
+    /**
+     * 获取所有用户（分页）
+     *
+     * @param page 页码（从1开始，可选，默认为1）
+     * @param size 每页大小（可选，默认为10，最大100）
+     * @return 用户列表
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<UserDTO>>> getAllUsers(
+            @RequestParam(required = false, defaultValue = "1")
+            @Min(value = 1, message = "页码必须大于0")
+            Integer page,
+
+            @RequestParam(required = false, defaultValue = "10")
+            @Min(value = 1, message = "每页大小必须大于0")
+            Integer size) {
+
+        logger.info("Getting all users with page: {}, size: {}", page, size);
+
+        // 验证并调整分页参数
+        int validPage = Math.max(1, page);
+        int validSize = Math.min(Math.max(1, size), AppConstants.MAX_PAGE_SIZE);
+
+        List<User> users = userService.getAllUsers(validPage, validSize);
+        long total = userService.getUserCount();
+
+        List<UserDTO> userDTOs = users.stream()
+                .map(UserConverter::toDTO)
+                .collect(Collectors.toList());
+
+        PageResponse<UserDTO> pageResponse = new PageResponse<>(userDTOs, validPage, validSize, total);
+
+        return ResponseEntity.ok(ApiResponse.success(pageResponse));
     }
 
-    @DeleteMapping("/user/{id}")
-    public Map<String, Object> deleteUser(@PathVariable String id) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 没有检查用户是否存在
-        // 没有异常处理
+    /**
+     * 更新用户信息
+     *
+     * @param id      用户ID
+     * @param userDTO 更新的用户信息
+     * @return 更新后的用户信息
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserDTO>> updateUser(
+            @PathVariable
+            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
+            String id,
+
+            @Valid @RequestBody UserDTO userDTO) {
+
+        logger.info("Updating user with id: {}", id);
+
+        if (id.length() > AppConstants.MAX_ID_LENGTH) {
+            logger.warn("User id too long: {}", id);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
+        }
+
+        User updatedUser = userService.updateUser(id, userDTO.getName(), userDTO.getEmail());
+        UserDTO updatedDTO = UserConverter.toDTO(updatedUser);
+
+        return ResponseEntity.ok(ApiResponse.success("用户更新成功", updatedDTO));
+    }
+
+    /**
+     * 删除用户
+     *
+     * @param id 用户ID
+     * @return 删除结果
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Object>> deleteUser(
+            @PathVariable
+            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
+            String id) {
+
+        logger.info("Deleting user with id: {}", id);
+
+        if (id.length() > AppConstants.MAX_ID_LENGTH) {
+            logger.warn("User id too long: {}", id);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
+        }
+
         userService.deleteUser(id);
-        
-        result.put("message", "deleted");
-        result.put("code", "200");
-        
-        return result;
+
+        return ResponseEntity.ok(ApiResponse.success("用户删除成功", null));
+    }
+
+    /**
+     * 获取用户统计信息
+     *
+     * @return 统计信息
+     */
+    @GetMapping("/statistics")
+    public ResponseEntity<ApiResponse<Object>> getUserStatistics() {
+        logger.info("Getting user statistics");
+
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserStatistics()));
     }
 }
-
