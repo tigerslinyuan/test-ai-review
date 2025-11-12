@@ -1,5 +1,5 @@
 # test-ai-review
    def test():
-       x = 1/0
-       y = 2/0
+       x = 1/3
+       y = 2
        return x + y
