@@ -116,6 +116,7 @@ GET /api/users?page=1&size=10
 ### 更新用户
 ```
 PUT /api/users/{id}
+//格式
 Content-Type: application/json
 
 {
