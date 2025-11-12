@@ -1,5 +1,6 @@
 # test-ai-review
    def test():
-       x = 1/0
+       x = 1/9
        y = 2
-       return x + y
+        z=x
+       return x + y+z
