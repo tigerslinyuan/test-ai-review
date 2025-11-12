@@ -35,8 +35,8 @@ public final class AppConstants {
     public static final int MAX_PAGE_SIZE = 100;
 
     /**
-     * 最近用户时间范围（7天，单位：毫秒）
+     * 一周的毫秒数
      */
-    public static final long RECENT_USER_TIME_RANGE_MS = 7L * 24 * 60 * 60 * 1000;
+    public static final long WEEK_IN_MILLIS = 7L * 24 * 60 * 60 * 1000;
 }
 

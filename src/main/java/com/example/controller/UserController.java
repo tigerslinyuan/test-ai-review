@@ -5,6 +5,7 @@ import com.example.dto.*;
 import com.example.model.User;
 import com.example.service.UserService;
 import com.example.util.UserConverter;
+import com.example.validation.ValidUserId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
-import javax.validation.constraints.Pattern;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,17 +44,9 @@ public class UserController {
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserDTO>> getUser(
-            @PathVariable
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
-            String id) {
+            @PathVariable @ValidUserId String id) {
 
         logger.info("Getting user with id: {}", id);
-
-        if (id.length() > AppConstants.MAX_ID_LENGTH) {
-            logger.warn("User id too long: {}", id);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
-        }
 
         User user = userService.getUserById(id);
         UserDTO userDTO = UserConverter.toDTO(user);
@@ -123,19 +115,10 @@ public class UserController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserDTO>> updateUser(
-            @PathVariable
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
-            String id,
-
+            @PathVariable @ValidUserId String id,
             @Valid @RequestBody UserDTO userDTO) {
 
         logger.info("Updating user with id: {}", id);
-
-        if (id.length() > AppConstants.MAX_ID_LENGTH) {
-            logger.warn("User id too long: {}", id);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
-        }
 
         User updatedUser = userService.updateUser(id, userDTO.getName(), userDTO.getEmail());
         UserDTO updatedDTO = UserConverter.toDTO(updatedUser);
@@ -151,17 +134,9 @@ public class UserController {
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Object>> deleteUser(
-            @PathVariable
-            @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户ID格式不正确")
-            String id) {
+            @PathVariable @ValidUserId String id) {
 
         logger.info("Deleting user with id: {}", id);
-
-        if (id.length() > AppConstants.MAX_ID_LENGTH) {
-            logger.warn("User id too long: {}", id);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error(ResponseCode.BAD_REQUEST.getCode(), "用户ID长度不能超过" + AppConstants.MAX_ID_LENGTH));
-        }
 
         userService.deleteUser(id);
 

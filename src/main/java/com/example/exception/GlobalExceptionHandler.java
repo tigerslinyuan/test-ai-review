@@ -30,6 +30,11 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ResponseCode.NOT_FOUND));
     }
 
+    /**
+     * 处理Service层抛出的参数验证异常
+     * 注意：MethodArgumentNotValidException只处理Controller层的@Valid验证，
+     * Service层的业务逻辑验证会抛出IllegalArgumentException
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgument(IllegalArgumentException e) {
         logger.warn("Invalid argument: {}", e.getMessage());

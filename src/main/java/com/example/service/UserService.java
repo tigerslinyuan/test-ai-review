@@ -3,6 +3,7 @@ package com.example.service;
 import com.example.constants.AppConstants;
 import com.example.exception.ResourceNotFoundException;
 import com.example.model.User;
+import com.example.util.EmailValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -60,24 +61,34 @@ public class UserService {
             throw new IllegalArgumentException("邮箱不能为空");
         }
 
+        String trimmedEmail = email.trim().toLowerCase();
+        if (!EmailValidator.isValid(trimmedEmail)) {
+            throw new IllegalArgumentException("邮箱格式不正确");
+        }
+
         String userId = AppConstants.USER_ID_PREFIX + counter.getAndIncrement();
         long currentTime = System.currentTimeMillis();
 
-        User user = new User(userId, name.trim(), email.trim().toLowerCase(), currentTime, null);
+        User user = new User(userId, name.trim(), trimmedEmail, currentTime, null);
         users.put(userId, user);
 
-        logger.info("Created user with id: {}, name: {}, email: {}", userId, name, email);
+        logger.info("Created user with id: {}, name: {}, email: {}", userId, name, trimmedEmail);
         return user;
     }
 
     /**
      * 获取所有用户（分页）
+     * 
+     * 注意：这是内存实现，每次分页都需要加载所有数据并排序。
+     * 在生产环境中应使用数据库索引和分页查询来优化性能。
      *
      * @param page 页码（从1开始）
      * @param size 每页大小
      * @return 用户列表
      */
     public List<User> getAllUsers(int page, int size) {
+        // 由于是内存实现，需要先加载所有数据
+        // 在生产环境中，应使用数据库分页查询（如 LIMIT/OFFSET 或游标分页）
         List<User> allUsers = new ArrayList<>(users.values());
 
         // 按创建时间倒序排序
@@ -126,9 +137,14 @@ public class UserService {
             throw new IllegalArgumentException("邮箱不能为空");
         }
 
+        String trimmedEmail = email.trim().toLowerCase();
+        if (!EmailValidator.isValid(trimmedEmail)) {
+            throw new IllegalArgumentException("邮箱格式不正确");
+        }
+
         User user = getUserById(id);
         user.setName(name.trim());
-        user.setEmail(email.trim().toLowerCase());
+        user.setEmail(trimmedEmail);
         user.setUpdatedAt(System.currentTimeMillis());
 
         users.put(id, user);
@@ -190,7 +206,7 @@ public class UserService {
      */
     private long countValidEmails() {
         return users.values().stream()
-                .filter(user -> user.getEmail() != null && user.getEmail().contains("@"))
+                .filter(user -> user.getEmail() != null && EmailValidator.isValid(user.getEmail()))
                 .count();
     }
 
@@ -199,7 +215,7 @@ public class UserService {
      */
     private long countRecentUsers() {
         long now = System.currentTimeMillis();
-        long timeRange = AppConstants.RECENT_USER_TIME_RANGE_MS;
+        long timeRange = AppConstants.WEEK_IN_MILLIS;
 
         return users.values().stream()
                 .filter(user -> {
